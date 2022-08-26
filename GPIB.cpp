@@ -154,7 +154,7 @@ boolean GPIB::getSRQ(void) {
 
 boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
   //  loop for searching RQS bit
-  for (int i = 1 ; i < 32 ; i++) { // address == 0 is self
+  for (int i = 1 ; i < 31 ; i++) { // address == 0 is self
     unsigned long start = millis();
     
     // attention

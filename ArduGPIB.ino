@@ -1,67 +1,60 @@
 /*
  * GIPB Ether Adapter with Arduino Nano (Every)
 */
-
-/*
- * BYE, QUI, EXI
- * RES, RST
- * STA
- * IFC
- * REM
- * LOC
- * DCL
- * SRQ
- * TIM ms
- * CLE(:add)
- * TAL(:add) option
- * LIS(:add)(:del1+del2+...)
- */
-
-// Define PIN assign
-#define DIO1  19
-#define DIO2  18
-#define DIO3  17
-#define DIO4  16
-#define DIO5  15
-#define DIO6  14
-#define DIO7  9
-#define DIO8  8
-#define EOI   6
-#define DAV   5
-#define NRFD  4
-#define NDAC  3
-#define IFC   7
-#define ATN   2
-#define REN   GND
-#define SRQ   GND
+#include <EEPROM.h>
 
 // for Ethernet
 //#include <Ethernet.h>
 #include <EthernetENC.h>
-byte ip[] = { 10, 77, 0, 123 };
-byte mac[] = { 0xFE, 0xFF, 0x0A, 0x4D, 0x00, 0x7B }; // locally administered {0xFe, 0xFF, 10d, 77d, 0d, 123d}
-EthernetServer server(1234); // same port as PROLOGIX GPIB-ETHERNET-CONTROLLER
+byte ip[] = { 192, 168, 0, 1 }; // dummy address
+byte mac[] = { 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x00 }; // dummy locally administered
+EthernetServer server(1234); // same port(1234) as PROLOGIX GPIB-ETHERNET-CONTROLLER
 EthernetClient client;
 
 // for GPIB
 #include "GPIB.h"
 GPIB gpib;
 
-// for Command Interpreter
+// for Serial Command Interpreter
+String com;
+
+// for Ethernet Command Interpreter
 String line, verb, address, delimiters, option;
 
 void (*resetController) (void) = 0; // reset function
 
 void setup() {
+  // Setup serial
+  Serial.begin(9600);
+  com = String();
+  
   // initialize the ethernet device
   Ethernet.init(10); // CS pin10
+
+  // load ip address from EEPROM
+  for (byte i = 0 ; i < 4 ; i++) ip[i] = EEPROM.read(i); // IP address = 0 - 3
+
+  // load mac address from EEPROM
+  for (byte i = 4 ; i < 10 ; i++) mac[i] = EEPROM.read(i); // IP address = 4 - 9
+  
   Ethernet.begin(mac, ip);
-  // start listening for clients
   server.begin();
   
-  // initialize gpib line
+  // initialize gpib
   gpib.init();
 
+  // load device default GPIB address from EEPROM
+  byte addr = EEPROM.read(10); // default GPIB address = 10
+  if (addr < 0 && addr > 31) gpib.address_default = addr; // 許されるGPIBアドレスは1-30
+
+  // load default delimiters from GPIB
+  byte del[] = {0x0D, 0x0A}; // \r+\n
+  del[0] = EEPROM.read(11); del[1] = EEPROM.read(12); // default delimiters = 11, 12
+  if (del[0] == 0) { del[0] = 0x0D; del[1] = 0x0A; } // もし1文字目がゼロだったら「\r\n」に強制する
+  String s = String();
+  for (int i = 0 ; i < 2 ; i++) if (del[i] != 0) s += '+'+String(del[i], DEC); else break; // 文字列化
+  gpib.delimiters_default = s.substring(1);
+  
 }
 
 void loop() {
@@ -82,7 +75,92 @@ void loop() {
   // ?IPA -> XXX.XXX.XXX.XXX
   // ?ADD -> X
   // ?DEL -> XX+XX+XX...
-  
+  // !MAC XX:XX:XX:XX:XX:XX
+  // !IPA XXX.XXX.XXX.XXX
+  // !ADD X
+  // !DEL XX+XX+XX...
+  if (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n') {
+      com.trim();
+      String v = com.substring(0, 4); v.toUpperCase();
+      String o = com.substring(com.indexOf(' ')); o.trim();
+      if (v.equals("?MAC")) {
+         char buff[8];
+         for (int i = 0 ; i < 5 ; i++) { sprintf(buff, "%02x:", mac[i]); Serial.print(buff); }
+         sprintf(buff, "%02x\r\n", mac[5]); Serial.print(buff);
+      } else if (v.equals("?IPA")) {
+        for (int i = 0 ; i < 3 ; i++) { Serial.print(ip[i], DEC); Serial.print('.'); }
+        Serial.print(ip[3], DEC); Serial.print("\r\n");
+      } else if (v.equals("?ADD")) {
+        Serial.print(gpib.address_default+"\r\n");
+      } else if (v.equals("?DEL")) {
+        Serial.print(gpib.delimiters_default+"\r\n");
+      } else if (v.equals("!MAC")) {
+        o += ':'; // 末尾に':'を追加
+        int j = 0;
+        boolean isInvalid = false;
+        char buf[3];
+        long t[] = {-1, -1, -1, -1, -1, -1};
+        for (int i = o.indexOf(':') ; i >= 0 && j < 6 ; i = o.indexOf(':'), j++) {
+          (o.substring(0, i)).toCharArray(buf, 3);
+          t[j] = strtol(buf, NULL, 16);
+          isInvalid |= (t[j] < 0 || t[j] > 255); // 0-255の範囲外ならInvalid
+          o = o.substring(i+1);
+        }
+        isInvalid |= (j != 6); // 6つ読めなかった場合にInvalidとする
+        if(!isInvalid){
+          for (int i = 0 ; i < 5 ; i++) {
+            EEPROM.write(4+i, (byte)t[i]);
+            sprintf(buf, "%02X", t[i]); Serial.print(String(buf)+":");
+          }
+          EEPROM.write(9, (byte)t[5]);
+          sprintf(buf, "%02X", t[5]); Serial.print(String(buf)+" saved!\r\n");
+        } else Serial.print("Invalid MAC address!\r\n");
+      } else if (v.equals("!IPA")) {
+        o += '.'; // 末尾に'.'を追加
+        int j = 0;
+        boolean isInvalid = false;
+        long t[] = {-1, -1, -1, -1};
+        for (int i = o.indexOf('.') ; i >= 0 && j < 4 ; i = o.indexOf('.'), j++) {
+          t[j] = o.substring(0, i).toInt();
+          isInvalid |= (t[j] < 0 || t[j] > 255); // 0-255の範囲外ならInvalid
+          o = o.substring(i+1);
+        }
+        isInvalid |= (j != 4); // 4つ読めなかった場合にInvalidとする
+        if(!isInvalid){
+          for (int i = 0 ; i < 3 ; i++) {
+            EEPROM.write(i, (byte)t[i]);
+            Serial.print(t[i], DEC); Serial.print(".");
+          }
+          EEPROM.write(3, (byte)t[3]);
+          Serial.print(t[3], DEC); Serial.print(" saved!\r\n");
+        } else Serial.print("Invalid IP address!\r\n");
+      } else if (v.equals("!ADD")) {
+        if (o.toInt() > 0 && o.toInt() < 31) { // 許されるGPIBアドレスは1-30
+          EEPROM.write(10, (byte)(o.toInt())); // 10バイト目に1バイト書き込み
+          Serial.print(o.toInt()+" saved!\r\n");
+        } else Serial.print("Invalid address!\r\n");
+      } else if (v.equals("!DEL")) {
+        o += '+'; // 末尾に'+'を追加
+        long t[] = {0, 0};
+        for (int i = o.indexOf('+'), j = 0 ; i >= 0 && j < 2 ; i = o.indexOf('+'), j++) {
+          t[j] = o.substring(0, i).toInt();
+          if (t[j] < 0 || t[j] > 255) t[j] = 0; // 1バイトの範囲外ならゼロにする
+          o = o.substring(i+1);
+        }
+        if (t[0] > 0) {
+          EEPROM.write(11, (byte)t[0]); // 1文字目を11バイト目に書き込み
+          Serial.print(t[0], DEC);
+          EEPROM.write(12, (byte)t[1]); // 2文字目を12バイト目に書き込み
+          if (t[1] > 0) { Serial.print("+"); Serial.print(t[1], DEC); }
+          Serial.print(" saved!\r\n");
+        } else Serial.print("Invalid delimiters!\r\n");
+      } else {
+        Serial.print("Unknown command.\r\n");
+      }
+    } else com += c;
+  }
 
   // Etherrnet側コマンドインタプリタ
   if (client && client.available()) {
