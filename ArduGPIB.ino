@@ -45,7 +45,7 @@ void setup() {
 
   // load device default GPIB address from EEPROM
   byte addr = EEPROM.read(10); // default GPIB address = 10
-  if (addr < 0 && addr > 31) gpib.address_default = addr; // 許されるGPIBアドレスは1-30
+  if (addr < 1 || addr > 30) gpib.address_default = addr; // 許されるGPIBアドレスは1-30
 
   // load default delimiters from GPIB
   byte del[] = {0x0D, 0x0A}; // \r+\n
