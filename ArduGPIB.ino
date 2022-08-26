@@ -123,7 +123,7 @@ void loop() {
       } else if (verb.startsWith("CLE")) { gpib.sendSDC((byte)address.toInt()); // CLE(:add)
       } else if (verb.startsWith("LIS")) { // LIS(:add)(:del1+del2+...)
         String reply = String();
-        gpib.listen((byte)address.toInt(), &reply, del);
+        gpib.listen((byte)address.toInt(), reply, del);
         client.print(reply);
       } else if (verb.startsWith("TAL")) { // TAL(:add) option
         gpib.talk((byte)address.toInt(), option);

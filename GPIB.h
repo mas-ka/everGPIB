@@ -34,9 +34,10 @@
       boolean sendDCL(void); // DCL
       boolean sendSDC(const byte addr); // SDC
       boolean getSRQ(void); // SRQ
+      boolean searchBySerialPoll(byte &addr, byte &status); // SRQのシリアルポール
       String getLineStatus(void); // ライン状態の取得
       boolean talk(const byte addr, const String com); // トーカ
-      boolean listen(const byte addr, String *reply, const String del); // リスナ
+      boolean listen(const byte addr, String &reply, const String del); // リスナ
       
     private:
       byte get_dio(void);

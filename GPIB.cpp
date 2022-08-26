@@ -20,7 +20,7 @@ boolean GPIB::talk(const byte addr, const String com) { // 送信に失敗した
   // unlisten
   if (!write(0x3F)) return false; delayMicroseconds(20);
   
-  // talker address
+  // talker address (0 == self)
   if (!write(0x40)) return false; delayMicroseconds(20);
   
   // listener address
@@ -43,9 +43,9 @@ boolean GPIB::talk(const byte addr, const String com) { // 送信に失敗した
   return true;
 }
 
-boolean GPIB::listen(const byte addr, String *reply, const String del) {
+boolean GPIB::listen(const byte addr, String &reply, const String del) {
   // 返り値: タイムアウト等でfalse
-  // *reply : 読めたStringを入れる。
+  // &reply : 読めたStringを入れる。
   // del  : デリミタ文字列
   
   unsigned long start = millis();
@@ -59,7 +59,7 @@ boolean GPIB::listen(const byte addr, String *reply, const String del) {
   // talker address
   if (!write((byte)(0x40 + addr))) return false; delayMicroseconds(20);
   
-  // listener address
+  // listener address (0 == self)
   if (!write(0x20)) return false; delayMicroseconds(20);
   
   // end of attention
@@ -68,16 +68,16 @@ boolean GPIB::listen(const byte addr, String *reply, const String del) {
   digitalWrite(ATN, HIGH); delayMicroseconds(20);
   
   // recieve data
-  *reply = ""; // 空にする
+  reply = ""; // 空にする
   byte c;
   boolean eoi;
   while (true) {
     if (!read(&c, &eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
     if (millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
-    *reply += (char)c; // 読めた文字を追加
+    reply += (char)c; // 読めた文字を追加
     if (eoi) return true; // EOIが来たんで読めたとこまででtrueで返す
-    if ((*reply).endsWith(del)) { // デリミタが来た
-      *reply = (*reply).substring(0, (*reply).indexOf(del));
+    if (reply.endsWith(del)) { // デリミタが来た
+      reply = reply.substring(0, reply.indexOf(del));
       return true;
     }
   }
@@ -85,7 +85,7 @@ boolean GPIB::listen(const byte addr, String *reply, const String del) {
 
 void GPIB::sendIFC(void) {
   pinMode(IFC, OUTPUT); digitalWrite(IFC, LOW); delayMicroseconds(128);
-  digitalWrite(IFC, HIGH);
+  digitalWrite(IFC, HIGH); delayMicroseconds(20);
 }
 
 void GPIB::sendREM(void) {
@@ -149,7 +149,50 @@ String GPIB::getLineStatus(void) {
 }
 
 boolean GPIB::getSRQ(void) {
-  pinMode(SRQ, INPUT_PULLUP); return (boolean)digitalRead(SRQ);
+  pinMode(SRQ, INPUT); return (boolean)digitalRead(SRQ);
+}
+
+boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
+  //  loop for searching RQS bit
+  for (int i = 1 ; i < 32 ; i++) { // address == 0 is self
+    unsigned long start = millis();
+    
+    // attention
+    pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
+
+    // unlisten
+    if (!write(0x3F)) return false; delayMicroseconds(10);
+  
+    // send SPE (Serial Poll Enable)
+    if (!write(0x18)) return false; delayMicroseconds(10);
+
+    // talker address
+    if (!write((byte)(0x40 + addr))) return false; delayMicroseconds(20);
+
+    // end of attention
+    digitalWrite(ATN, HIGH); delayMicroseconds(128);
+
+    // read DIO
+    byte c;
+    boolean eoi;
+    if (!read(&c, &eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
+    if (millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
+    if (bitRead(c, 6)) { // RQSビットが立っていれば
+      addr = (byte)i; // アドレスを返す
+      status = c; // ステータスを返す
+      return true; // trueを返す
+    }
+    
+    // attention
+    pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
+  
+    // send SPD (Serial Poll Disable)
+    if (!write(0x19)) return false; delayMicroseconds(10);
+
+    // end of attention
+    digitalWrite(ATN, HIGH); delayMicroseconds(128);
+  }
+  return false; // RQS立ってるデバイスが見つからなかったのでfalseを返す
 }
 
 // private functions
@@ -180,16 +223,18 @@ void GPIB::set_dio(byte x) {
 boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込めたらtrue、タイムアウト等でfalseを返す
   unsigned long start = millis();
   
-  // wait until (LOW == NDAC)
-  pinMode(NDAC, INPUT_PULLUP); while (HIGH == digitalRead(NDAC)) {
+  // wait until (LOW == NRFD && LOW == NDAC)
+  pinMode(NRFD, INPUT); pinMode(NDAC, INPUT);
+  while (HIGH == digitalRead(NRFD) && HIGH == digitalRead(NDAC)) {
     if (millis()-start > ms_timeout) return false; // タイムアウト監視
   }
+  delayMicroseconds(10);
   
   // output data to DIO
-  set_dio(data);
+  set_dio(data); delayMicroseconds(300);
   
   // wait until (HIGH == NRFD)
-  pinMode(NRFD, INPUT); while (LOW == digitalRead(NRFD)) {
+  while (LOW == digitalRead(NRFD)) {
     if (millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   
@@ -200,6 +245,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
   while (LOW == digitalRead(NDAC)) {
     if (millis()-start > ms_timeout) return false; // タイムアウト監視
   }
+  delayMicroseconds(20);
   
   digitalWrite(DAV, HIGH);
   set_dio(0); delayMicroseconds(10);
