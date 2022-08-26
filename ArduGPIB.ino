@@ -188,30 +188,39 @@ void loop() {
       }
       
       // コマンドの解釈
-      if (verb.startsWith("BYE") || verb.startsWith("QUI") || verb.startsWith("EXI")) { client.stop(); // クライアント停止
-      } else if (verb.startsWith("RES") || verb.startsWith("RST")) { delay(1000); resetController(); // リセット操作
-      } else if (verb.startsWith("STA")) { client.println(gpib.getLineStatus()); // ライン状態の取得と送信
-      } else if (verb.startsWith("IFC")) { gpib.sendIFC(); // IFC
-      } else if (verb.startsWith("REM")) { gpib.sendREM(); // REM
-      } else if (verb.startsWith("LOC")) { gpib.sendLOC(); // LOC
-      } else if (verb.startsWith("DCL")) { gpib.sendDCL(); // DCL
-      } else if (verb.startsWith("SRQ")) { client.println(gpib.getSRQ()?"HIGH":"LOW"); // SRQ
+      if (verb.startsWith("BYE") || verb.startsWith("QUI") || verb.startsWith("EXI")) { // クライアント停止
+        client.stop();
+      } else if (verb.startsWith("RES") || verb.startsWith("RST")) { // リセット操作
+        delay(1000); resetController();
+      } else if (verb.startsWith("STA")) {// ライン状態の取得と送信
+        client.println(gpib.getLineStatus()); 
+      } else if (verb.startsWith("IFC")) { // IFC
+        gpib.sendIFC(); client.println("OK");
+      } else if (verb.startsWith("REM") || verb.startsWith("REN")) { // REM
+        gpib.sendREM(); client.println("OK");
+      } else if (verb.startsWith("LOC")) { // LOC
+        gpib.sendLOC(); client.println("OK");
+      } else if (verb.startsWith("DCL")) { // DCL
+        gpib.sendDCL(); client.println("OK");
+      } else if (verb.startsWith("SRQ")) { // SRQ
+        client.println(gpib.getSRQ()?"HIGH":"LOW");
       } else if (verb.startsWith("TIM")) { // TIM ms
-        if (option.toInt() > 0) gpib.ms_timeout = option.toInt(); // 1ms以上なら有効なのでタイムアウト定数を入れ替える
-      } else if (verb.startsWith("CLE")) { gpib.sendSDC((byte)address.toInt()); // CLE(:add)
+        if (option.toInt() > 0) {
+          gpib.ms_timeout = option.toInt(); // 1ms以上なら有効なのでタイムアウト定数を入れ替える
+          client.println("OK");
+        } else client.println("ERROR");
+      } else if (verb.startsWith("CLE")) { // CLE(:add)
+        client.println(gpib.sendSDC((byte)address.toInt())?"OK":"ERROR");
       } else if (verb.startsWith("LIS")) { // LIS(:add)(:del1+del2+...)
         String reply = String();
         gpib.listen((byte)address.toInt(), reply, del);
         client.print(reply);
       } else if (verb.startsWith("TAL")) { // TAL(:add) option
-        gpib.talk((byte)address.toInt(), option);
+        client.println(gpib.talk((byte)address.toInt(), option)?"OK":"ERROR");
       } else { ; } // 上記以外なら何もしない
       line = ""; // バッファを空にする
     } else { line += String(c); } // 終端じゃないなら
   }
   if (client && !client.connected()) client.stop(); // 切断されていたら解放する
-
-
-
-
+  
 }
