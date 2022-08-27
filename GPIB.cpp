@@ -12,9 +12,11 @@ void GPIB::init(void) {
   pinMode(NRFD, OUTPUT); digitalWrite(NRFD, LOW);
 }
 
-boolean GPIB::talk(const byte addr, const String com) { // 送信に失敗したらfalseを返す
-  // attention
+boolean GPIB::talk(const byte addr, const String com, const String del) { // 送信に失敗したらfalseを返す
+  // set EOI to FALSE (HIGH)
   pinMode(EOI, OUTPUT); digitalWrite(EOI, HIGH);
+  
+  // attention
   pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
   
   // unlisten
@@ -30,6 +32,7 @@ boolean GPIB::talk(const byte addr, const String com) { // 送信に失敗した
   digitalWrite(ATN, HIGH); delayMicroseconds(20);
     
   // write string
+  com.concat(del); // デリミタを末尾に連結する
   int i;
   for (i = 0 ; i < com.length()-1 ; i++) {
     if (!write((byte)com.indexOf(i))) return false; delayMicroseconds(20);

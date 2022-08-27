@@ -36,7 +36,7 @@
       boolean getSRQ(void); // SRQ
       boolean searchBySerialPoll(byte &addr, byte &status); // SRQのシリアルポール
       String getLineStatus(void); // ライン状態の取得
-      boolean talk(const byte addr, const String com); // トーカ
+      boolean talk(const byte addr, const String com, const String del); // トーカ
       boolean listen(const byte addr, String &reply, const String del); // リスナ
       
     private:

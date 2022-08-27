@@ -204,6 +204,12 @@ void loop() {
         gpib.sendDCL(); client.println("OK");
       } else if (verb.startsWith("SRQ")) { // SRQ
         client.println(gpib.getSRQ()?"HIGH":"LOW");
+      } else if (verb.startsWith("SPO")) { // Serial Poll
+        byte addr, status;
+        if (gpib.searchBySerialPoll(addr, status)) { // found SRQ device
+          client.println(addr+";"+("0000000"+String(status, BIN)).substring(String(status, BIN).length()-1));
+        } else client.println("NONE"); // not found
+        client.println(gpib.getSRQ()?"HIGH":"LOW");
       } else if (verb.startsWith("TIM")) { // TIM ms
         if (option.toInt() > 0) {
           gpib.ms_timeout = option.toInt(); // 1ms以上なら有効なのでタイムアウト定数を入れ替える
@@ -216,7 +222,7 @@ void loop() {
         gpib.listen((byte)address.toInt(), reply, del);
         client.print(reply);
       } else if (verb.startsWith("TAL")) { // TAL(:add) option
-        client.println(gpib.talk((byte)address.toInt(), option)?"OK":"ERROR");
+        client.println(gpib.talk((byte)address.toInt(), option, del)?"OK":"ERROR");
       } else { ; } // 上記以外なら何もしない
       line = ""; // バッファを空にする
     } else { line += String(c); } // 終端じゃないなら
