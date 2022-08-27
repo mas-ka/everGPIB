@@ -12,7 +12,7 @@ void GPIB::init(void) {
   pinMode(NRFD, OUTPUT); digitalWrite(NRFD, LOW);
 }
 
-boolean GPIB::talk(const byte addr, const String com, const String del) { // 送信に失敗したらfalseを返す
+boolean GPIB::talk(const byte addr, const String com, const String del, const boolean eoi) { // 送信に失敗したらfalseを返す
   // set EOI to FALSE (HIGH)
   pinMode(EOI, OUTPUT); digitalWrite(EOI, HIGH);
   
@@ -32,14 +32,14 @@ boolean GPIB::talk(const byte addr, const String com, const String del) { // 送
   digitalWrite(ATN, HIGH); delayMicroseconds(20);
     
   // write string
-  com.concat(del); // デリミタを末尾に連結する
+  if (!del.equals("")) com.concat(del); // デリミタが空でなければ末尾に連結する
   int i;
   for (i = 0 ; i < com.length()-1 ; i++) {
     if (!write((byte)com.indexOf(i))) return false; delayMicroseconds(20);
   }
   
   // write last char
-  digitalWrite(EOI, LOW);
+  if (eoi) digitalWrite(EOI, LOW); // 渡されたEOI指示がtrueならEOIラインをLOWにしてアサートする
   if (!write((byte)com.indexOf(i))) return false; delayMicroseconds(20);
   digitalWrite(EOI, HIGH);
 
@@ -75,7 +75,7 @@ boolean GPIB::listen(const byte addr, String &reply, const String del) {
   byte c;
   boolean eoi;
   while (true) {
-    if (!read(&c, &eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
+    if (!read(c, eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
     if (millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
     reply += (char)c; // 読めた文字を追加
     if (eoi) return true; // EOIが来たんで読めたとこまででtrueで返す
@@ -178,7 +178,7 @@ boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
     // read DIO
     byte c;
     boolean eoi;
-    if (!read(&c, &eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
+    if (!read(c, eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
     if (millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
     if (bitRead(c, 6)) { // RQSビットが立っていれば
       addr = (byte)i; // アドレスを返す
@@ -212,7 +212,7 @@ byte GPIB::get_dio() {
   return x;
 }
 
-void GPIB::set_dio(byte x) {
+void GPIB::set_dio(const byte x) {
   pinMode(DIO1, OUTPUT); digitalWrite(DIO1, bitRead(~x, 0));
   pinMode(DIO2, OUTPUT); digitalWrite(DIO2, bitRead(~x, 1));
   pinMode(DIO3, OUTPUT); digitalWrite(DIO3, bitRead(~x, 2));
@@ -257,7 +257,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
 }
 
 
-boolean GPIB::read(byte *data, boolean *eoi) {
+boolean GPIB::read(byte &data, boolean &eoi) {
   // 返り値: タイムアウト等でfalse
   // data : 読んだ1バイトを入れる。
   // eoi  : 最終バイトだったならtrueを返す
@@ -277,10 +277,10 @@ boolean GPIB::read(byte *data, boolean *eoi) {
   digitalWrite(NRFD, LOW);
   
   // read from DIO
-  *data = get_dio();
+  data = get_dio();
   
   // check EOI
-  pinMode(EOI, INPUT); *eoi = (LOW == digitalRead(EOI));
+  pinMode(EOI, INPUT); eoi = (LOW == digitalRead(EOI));
   
   // data accepted
   pinMode(NDAC, OUTPUT); digitalWrite(NDAC, HIGH);

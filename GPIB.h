@@ -22,8 +22,6 @@
   
   class GPIB {
     public:
-      String address_default = "1",         // default GPIB address
-             delimiters_default = "13+10";  // default delimiters
       unsigned long ms_timeout = 10000; // 10 sec. for default timeout
       
       GPIB(); // インスタンス
@@ -36,14 +34,14 @@
       boolean getSRQ(void); // SRQ
       boolean searchBySerialPoll(byte &addr, byte &status); // SRQのシリアルポール
       String getLineStatus(void); // ライン状態の取得
-      boolean talk(const byte addr, const String com, const String del); // トーカ
+      boolean talk(const byte addr, const String com, const String del, const boolean eoi); // トーカ
       boolean listen(const byte addr, String &reply, const String del); // リスナ
       
     private:
       byte get_dio(void);
-      void set_dio(byte x);
+      void set_dio(const byte x);
       boolean write(const byte data);
-      boolean read(byte *data, boolean *eoi);
+      boolean read(byte &data, boolean &eoi);
       
   };
 #endif

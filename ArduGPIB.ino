@@ -19,7 +19,9 @@ GPIB gpib;
 String com;
 
 // for Ethernet Command Interpreter
-String line, verb, address, delimiters, option;
+String line, verb, delimiters, del, option;
+byte address;
+boolean assertEOI;
 
 void (*resetController) (void) = 0; // reset function
 
@@ -42,43 +44,15 @@ void setup() {
   
   // initialize gpib
   gpib.init();
-
-  // load device default GPIB address from EEPROM
-  byte addr = EEPROM.read(10); // default GPIB address = 10
-  if (addr < 1 || addr > 30) gpib.address_default = addr; // 許されるGPIBアドレスは1-30
-
-  // load default delimiters from GPIB
-  byte del[] = {0x0D, 0x0A}; // \r+\n
-  del[0] = EEPROM.read(11); del[1] = EEPROM.read(12); // default delimiters = 11, 12
-  if (del[0] == 0) { del[0] = 0x0D; del[1] = 0x0A; } // もし1文字目がゼロだったら「\r\n」に強制する
-  String s = String();
-  for (int i = 0 ; i < 2 ; i++) if (del[i] != 0) s += '+'+String(del[i], DEC); else break; // 文字列化
-  gpib.delimiters_default = s.substring(1);
   
 }
 
 void loop() {
-  // 新規Ethernet接続の管理
-  EthernetClient new_client = server.accept();
-  if (new_client) { // 新しいクライアントが接続してきた
-    if (client) { // 既にクライアントが接続していたら
-      new_client.print("BUSY\r\n"); new_client.stop(); // "BUSY"を返して切断する
-    } else { // これが1つめのクライアントなら
-      new_client.print("ACCEPT\r\n"); // "ACCEPT"を返す
-      client = new_client;
-      line = String();
-    }
-  }
-
   // シリアル側コマンドインタプリタ
   // ?MAC -> XX:XX:XX:XX:XX:XX
   // ?IPA -> XXX.XXX.XXX.XXX
-  // ?ADD -> X
-  // ?DEL -> XX+XX+XX...
   // !MAC XX:XX:XX:XX:XX:XX
   // !IPA XXX.XXX.XXX.XXX
-  // !ADD X
-  // !DEL XX+XX+XX...
   if (Serial.available() > 0) {
     char c = Serial.read();
     if (c == '\n') {
@@ -92,10 +66,6 @@ void loop() {
       } else if (v.equals("?IPA")) {
         for (int i = 0 ; i < 3 ; i++) { Serial.print(ip[i], DEC); Serial.print('.'); }
         Serial.print(ip[3], DEC); Serial.print("\r\n");
-      } else if (v.equals("?ADD")) {
-        Serial.print(gpib.address_default+"\r\n");
-      } else if (v.equals("?DEL")) {
-        Serial.print(gpib.delimiters_default+"\r\n");
       } else if (v.equals("!MAC")) {
         o += ':'; // 末尾に':'を追加
         int j = 0;
@@ -136,33 +106,38 @@ void loop() {
           EEPROM.write(3, (byte)t[3]);
           Serial.print(t[3], DEC); Serial.print(" saved!\r\n");
         } else Serial.print("Invalid IP address!\r\n");
-      } else if (v.equals("!ADD")) {
-        if (o.toInt() > 0 && o.toInt() < 31) { // 許されるGPIBアドレスは1-30
-          EEPROM.write(10, (byte)(o.toInt())); // 10バイト目に1バイト書き込み
-          Serial.print(o.toInt()+" saved!\r\n");
-        } else Serial.print("Invalid address!\r\n");
-      } else if (v.equals("!DEL")) {
-        o += '+'; // 末尾に'+'を追加
-        long t[] = {0, 0};
-        for (int i = o.indexOf('+'), j = 0 ; i >= 0 && j < 2 ; i = o.indexOf('+'), j++) {
-          t[j] = o.substring(0, i).toInt();
-          if (t[j] < 0 || t[j] > 255) t[j] = 0; // 1バイトの範囲外ならゼロにする
-          o = o.substring(i+1);
-        }
-        if (t[0] > 0) {
-          EEPROM.write(11, (byte)t[0]); // 1文字目を11バイト目に書き込み
-          Serial.print(t[0], DEC);
-          EEPROM.write(12, (byte)t[1]); // 2文字目を12バイト目に書き込み
-          if (t[1] > 0) { Serial.print("+"); Serial.print(t[1], DEC); }
-          Serial.print(" saved!\r\n");
-        } else Serial.print("Invalid delimiters!\r\n");
       } else {
         Serial.print("Unknown command.\r\n");
       }
     } else com += c;
   }
 
+  // 新規Ethernet接続の管理
+  EthernetClient new_client = server.accept();
+  if (new_client) { // 新しいクライアントが接続してきた
+    if (client) { // 既にクライアントが接続していたら
+      new_client.print("BUSY\r\n"); new_client.stop(); // "BUSY"を返して切断する
+    } else { // これが1つめのクライアントなら
+      new_client.print("ACCEPT\r\n"); // "ACCEPT"を返す
+      client = new_client;
+      line = String();
+    }
+  }
+
   // Etherrnet側コマンドインタプリタ
+  // BYE || QUI || EXI
+  // RES || RST
+  // STA
+  // IFC
+  // REM || REN
+  // LOC
+  // DCL
+  // SRQ
+  // SPO
+  // TIM ms
+  // CLE:addr
+  // LIS:addr:[del1][+del2] :delが指定されてない場合には必ずEOIまで読む
+  // TAL:addr:[del1][+del2][-] option :'-'があるとEOIをアサートしない
   if (client && client.available()) {
     char c = client.read(); 
     if (c == '\n') { // 終端文字なら
@@ -172,15 +147,16 @@ void loop() {
       option = line.substring(line.indexOf(' ')); option.trim();
       verb = line.substring(0, line.indexOf(' ')); verb.trim(); verb += ":: ";
       delimiters = verb.substring(verb.indexOf(':')+1); delimiters.trim();
-      address = delimiters.substring(0, delimiters.indexOf(':'));
-      if (address.length() == 0 || address.toInt() < 1 || address.toInt() > 30) address = gpib.address_default;
+      address = (byte)(delimiters.substring(0, delimiters.indexOf(':')).toInt());
       delimiters = delimiters.substring(delimiters.indexOf(':')+1);
       delimiters = delimiters.substring(0, delimiters.indexOf(':'));
-      if (delimiters.length() == 0) delimiters = gpib.delimiters_default;
       verb = verb.substring(0, verb.indexOf(':')); verb.trim(); verb.toUpperCase();
 
+      // EOIを送信するかどうか
+      assertEOI = !delimiters.endsWith("-");
+
       // デリミタのString化
-      String del = String();
+      del = "";
       delimiters += '+'; // 末尾に'+'追加
       while (delimiters.length() > 0) {
         del += (char)delimiters.substring(0, delimiters.indexOf('+')).toInt();
@@ -207,23 +183,29 @@ void loop() {
       } else if (verb.startsWith("SPO")) { // Serial Poll
         byte addr, status;
         if (gpib.searchBySerialPoll(addr, status)) { // found SRQ device
-          client.println(addr+";"+("0000000"+String(status, BIN)).substring(String(status, BIN).length()-1));
+          client.println(addr+":"+("0000000"+String(status, BIN)).substring(String(status, BIN).length()-1));
         } else client.println("NONE"); // not found
-        client.println(gpib.getSRQ()?"HIGH":"LOW");
       } else if (verb.startsWith("TIM")) { // TIM ms
         if (option.toInt() > 0) {
           gpib.ms_timeout = option.toInt(); // 1ms以上なら有効なのでタイムアウト定数を入れ替える
           client.println("OK");
         } else client.println("ERROR");
-      } else if (verb.startsWith("CLE")) { // CLE(:add)
-        client.println(gpib.sendSDC((byte)address.toInt())?"OK":"ERROR");
-      } else if (verb.startsWith("LIS")) { // LIS(:add)(:del1+del2+...)
-        String reply = String();
-        gpib.listen((byte)address.toInt(), reply, del);
-        client.print(reply);
-      } else if (verb.startsWith("TAL")) { // TAL(:add) option
-        client.println(gpib.talk((byte)address.toInt(), option, del)?"OK":"ERROR");
-      } else { ; } // 上記以外なら何もしない
+      } else if (verb.startsWith("CLE")) { // CLE:addr
+        if (address < 1 || address > 30) { client.println("ERROR");
+        } else client.println(gpib.sendSDC(address)?"OK":"ERROR");
+      } else if (verb.startsWith("LIS")) { // LIS:addr:[del1][+del2]
+        if (address < 1 || address > 30) { client.println("ERROR");
+        } else {
+          String reply = String();
+          gpib.listen(address, reply, del);
+          client.print(reply);
+        }
+      } else if (verb.startsWith("TAL")) { // TAL:addr:[del1][+del2][-] option
+        if (address < 1 || address > 30) { client.println("ERROR");
+        } else {
+          client.println(gpib.talk(address, option, del, assertEOI)?"OK":"ERROR");
+        }
+      } else client.println("ERROR"); // 上記以外
       line = ""; // バッファを空にする
     } else { line += String(c); } // 終端じゃないなら
   }
