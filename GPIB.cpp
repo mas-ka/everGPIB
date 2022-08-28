@@ -76,7 +76,7 @@ boolean GPIB::listen(const byte addr, String &reply, const String del) {
   boolean eoi;
   while (true) {
     if (!read(c, eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
-    if (millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
     reply += (char)c; // 読めた文字を追加
     if (eoi) return true; // EOIが来たんで読めたとこまででtrueで返す
     if (reply.endsWith(del)) { // デリミタが来た
@@ -179,7 +179,7 @@ boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
     byte c;
     boolean eoi;
     if (!read(c, eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
-    if (millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
     if (bitRead(c, 6)) { // RQSビットが立っていれば
       addr = (byte)i; // アドレスを返す
       status = c; // ステータスを返す
@@ -229,7 +229,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
   // wait until (LOW == NRFD && LOW == NDAC)
   pinMode(NRFD, INPUT); pinMode(NDAC, INPUT);
   while (HIGH == digitalRead(NRFD) && HIGH == digitalRead(NDAC)) {
-    if (millis()-start > ms_timeout) return false; // タイムアウト監視
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   delayMicroseconds(10);
   
@@ -238,7 +238,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
   
   // wait until (HIGH == NRFD)
   while (LOW == digitalRead(NRFD)) {
-    if (millis()-start > ms_timeout) return false; // タイムアウト監視
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   
   // validate data
@@ -246,7 +246,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
   
   // wait until (HIGH == NDAC)
   while (LOW == digitalRead(NDAC)) {
-    if (millis()-start > ms_timeout) return false; // タイムアウト監視
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   delayMicroseconds(20);
   
@@ -270,7 +270,7 @@ boolean GPIB::read(byte &data, boolean &eoi) {
   
   // wait until (LOW == DAV)
   pinMode(DAV, INPUT); while (HIGH == digitalRead(DAV)) {
-    if (millis()-start > ms_timeout) return false; // タイムアウト監視
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   
   // Ready for data
@@ -287,7 +287,7 @@ boolean GPIB::read(byte &data, boolean &eoi) {
   
   // wait until invalid data
   while (LOW == digitalRead(DAV)) {
-    if (millis()-start > ms_timeout) return false; // タイムアウト監視
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   digitalWrite(NDAC, LOW);
   

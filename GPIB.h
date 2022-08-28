@@ -22,7 +22,7 @@
   
   class GPIB {
     public:
-      unsigned long ms_timeout = 10000; // 10 sec. for default timeout
+      unsigned long ms_timeout = 10000; // ゼロならタイムアウトしない(デフォルトは10秒)
       
       GPIB(); // インスタンス
       void init(void); // 初期化

@@ -134,8 +134,8 @@ void loop() {
   // DCL
   // SRQ
   // SPO
-  // TIM ms
-  // CLE:addr
+  // TIM [ms]
+  // CLE:addr || SDC:addr
   // LIS:addr:[del1][+del2] :delが指定されてない場合には必ずEOIまで読む
   // TAL:addr:[del1][+del2][-] option :'-'があるとEOIをアサートしない
   if (client && client.available()) {
@@ -185,26 +185,23 @@ void loop() {
         if (gpib.searchBySerialPoll(addr, status)) { // found SRQ device
           client.println(addr+":"+("0000000"+String(status, BIN)).substring(String(status, BIN).length()-1));
         } else client.println("NONE"); // not found
-      } else if (verb.startsWith("TIM")) { // TIM ms
-        if (option.toInt() > 0) {
-          gpib.ms_timeout = option.toInt(); // 1ms以上なら有効なのでタイムアウト定数を入れ替える
-          client.println("OK");
-        } else client.println("ERROR");
-      } else if (verb.startsWith("CLE")) { // CLE:addr
-        if (address < 1 || address > 30) { client.println("ERROR");
-        } else client.println(gpib.sendSDC(address)?"OK":"ERROR");
+      } else if (verb.startsWith("TIM")) { // TIM [ms]
+        if (!option.equals("")) gpib.ms_timeout = (option.toInt() < 1)?0:option.toInt();
+          // 1ms未満ならゼロ、そうでないなら与えられたミリ秒をタイムアウトに入れる
+        client.println(gpib.ms_timeout); // 現在のタイムアウトミリ秒数を返す
+      } else if (verb.startsWith("CLE") || verb.startsWith("SDC")) { // CLE:addr || SDC:addr
+        if (address < 1 || address > 30) client.println("ERROR");
+        else client.println(gpib.sendSDC(address)?"OK":"ERROR");
       } else if (verb.startsWith("LIS")) { // LIS:addr:[del1][+del2]
-        if (address < 1 || address > 30) { client.println("ERROR");
-        } else {
+        if (address < 1 || address > 30) client.println("ERROR");
+        else {
           String reply = String();
           gpib.listen(address, reply, del);
           client.print(reply);
         }
       } else if (verb.startsWith("TAL")) { // TAL:addr:[del1][+del2][-] option
-        if (address < 1 || address > 30) { client.println("ERROR");
-        } else {
-          client.println(gpib.talk(address, option, del, assertEOI)?"OK":"ERROR");
-        }
+        if (address < 1 || address > 30) client.println("ERROR");
+        else client.println(gpib.talk(address, option, del, assertEOI)?"OK":"ERROR");
       } else client.println("ERROR"); // 上記以外
       line = ""; // バッファを空にする
     } else { line += String(c); } // 終端じゃないなら
