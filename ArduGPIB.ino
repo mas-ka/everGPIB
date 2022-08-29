@@ -163,6 +163,10 @@ void loop() {
         del += (char)delimiters.substring(0, delimiters.indexOf('+')).toInt();
         delimiters = delimiters.substring(delimiters.indexOf('+')+1);
       }
+
+      Serial.println("verb : "+verb);
+      Serial.print("address : "); Serial.println((int)address);
+      Serial.println("option : "+option);
       
       // コマンドの解釈
       if (verb.startsWith("BYE") || verb.startsWith("QUI") || verb.startsWith("EXI")) { // クライアント停止
