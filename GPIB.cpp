@@ -1,3 +1,10 @@
+/*
+ * GPIB library for Arduino Nano Every (※ NOT for NANO)
+ * NanoでSPI接続のEthernetモジュールと併用するにはピンが足りない！
+ * NanoだとRENをGNDに落としてリモート専用にした上で
+ * SRQをA6かA7のanalogRead()で対応する必要がある
+ */
+
 #include "GPIB.h"
 #include <Arduino.h>
 
@@ -17,32 +24,31 @@ boolean GPIB::talk(const byte addr, const String com, const String del, const bo
   pinMode(EOI, OUTPUT); digitalWrite(EOI, HIGH);
   
   // attention
-  pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);Serial.println("ATN");
+  pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
   
   // unlisten
-  if (!write(0x3F)) return false; delayMicroseconds(20);Serial.println("UNL");
+  if (!write(0x3F)) return false; delayMicroseconds(20);
   
   // talker address (0 == self)
-  if (!write(0x40)) return false; delayMicroseconds(20);Serial.println("TAD");
+  if (!write(0x40)) return false; delayMicroseconds(20);
   
   // listener address
-  if (!write((byte)(0x20 + addr))) return false; delayMicroseconds(20);Serial.println("LAD");
+  if (!write((byte)(0x20 + addr))) return false; delayMicroseconds(20);
   
   // end of attention
   digitalWrite(ATN, HIGH); delayMicroseconds(200);
     
   // write string
   if (!del.equals("")) com.concat(del); // デリミタが空でなければ末尾に連結する
-  Serial.println("com : "+com);
   int i;
   for (i = 0 ; i < com.length()-1 ; i++) {
-    if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);Serial.println(" DAT");
+    if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);
   }
   
   // write last char
   if (eoi) digitalWrite(EOI, LOW); // 渡されたEOI指示がtrueならEOIラインをLOWにしてアサートする
   if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);
-  digitalWrite(EOI, HIGH);Serial.println("END");
+  digitalWrite(EOI, HIGH);
 
   return true;
 }
@@ -225,40 +231,34 @@ void GPIB::set_dio(const byte x) {
 }
 
 boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込めたらtrue、タイムアウト等でfalseを返す
-  unsigned long start = millis(); Serial.println((char)data);
+  unsigned long start = millis();
   
   // wait until (LOW == NRFD && LOW == NDAC)
-  pinMode(NRFD, INPUT); pinMode(NDAC, INPUT);
-  while (LOW == digitalRead(NRFD)) { // && HIGH == digitalRead(NDAC)) {
-    Serial.print("NRFD:");Serial.print(digitalRead(NRFD));Serial.print(", NDAC:");Serial.println(digitalRead(NDAC));
+  pinMode(NDAC, INPUT); pinMode(NRFD, INPUT);
+  while (HIGH == digitalRead(NDAC) || HIGH == digitalRead(NRFD)) {
     if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   delayMicroseconds(10);
-  Serial.print(" NRFD:");Serial.print(digitalRead(NRFD));Serial.print(", NDAC:");Serial.println(digitalRead(NDAC));
   
   // output data to DIO
-  set_dio(data); delayMicroseconds(300);Serial.println("SET");
-  Serial.print(" NRFD:");Serial.print(digitalRead(NRFD));Serial.print(", NDAC:");Serial.println(digitalRead(NDAC));
+  set_dio(data); delayMicroseconds(300);
   
   // wait until (HIGH == NRFD)
-  //while (LOW == digitalRead(NRFD)) {
-  //  if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
-  //}Serial.println("NRFD");
+  while (LOW == digitalRead(NRFD)) {
+    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
+  }
   
   // validate data
-  pinMode(DAV, OUTPUT); digitalWrite(DAV, LOW);Serial.println("DAV");
-  Serial.print(" NRFD:");Serial.print(digitalRead(NRFD));Serial.print(", NDAC:");Serial.println(digitalRead(NDAC));
+  pinMode(DAV, OUTPUT); digitalWrite(DAV, LOW);
   
   // wait until (HIGH == NDAC)
   while (LOW == digitalRead(NDAC)) {
     if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
-  delayMicroseconds(20);Serial.println("NDAC");
-  Serial.print(" NRFD:");Serial.print(digitalRead(NRFD));Serial.print(", NDAC:");Serial.println(digitalRead(NDAC));
+  delayMicroseconds(20);
   
   digitalWrite(DAV, HIGH);
   //set_dio(0); delayMicroseconds(10);
-  Serial.println("DAV");
 
   return true;
 }

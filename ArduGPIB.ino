@@ -1,5 +1,5 @@
 /*
- * GIPB Ether Adapter with Arduino Nano (Every)
+ * GIPB Ether Adapter with Arduino Nano Every (※ NOT FOR NANO)
 */
 #include <EEPROM.h>
 
@@ -163,10 +163,6 @@ void loop() {
         del += (char)delimiters.substring(0, delimiters.indexOf('+')).toInt();
         delimiters = delimiters.substring(delimiters.indexOf('+')+1);
       }
-
-      Serial.println("verb : "+verb);
-      Serial.print("address : "); Serial.println((int)address);
-      Serial.println("option : "+option);
       
       // コマンドの解釈
       if (verb.startsWith("BYE") || verb.startsWith("QUI") || verb.startsWith("EXI")) { // クライアント停止
@@ -206,6 +202,7 @@ void loop() {
         }
       } else if (verb.startsWith("TAL")) { // TAL:addr:[del1][+del2][-] option
         if (address < 1 || address > 30) client.println("ERROR");
+        else if (!assertEOI && del.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
         else client.println(gpib.talk(address, option, del, assertEOI)?"OK":"ERROR");
       } else client.println("ERROR"); // 上記以外
       line = ""; // バッファを空にする

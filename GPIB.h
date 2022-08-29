@@ -1,40 +1,31 @@
+/*
+ * GPIB library for Arduino Nano Every (※ NOT for NANO)
+ * NanoでSPI接続のEthernetモジュールと併用するにはピンが足りない！
+ * NanoだとRENをGNDに落としてリモート専用にした上で
+ * SRQをA6かA7のanalogRead()で対応する必要がある
+ */
+ 
 #ifndef _GPIB_
   #define _GPIB_
   #include "Arduino.h"
   
   // Define PIN assign
-//  #define DIO1  3
-//  #define DIO2  4
-//  #define DIO3  5
-//  #define DIO4  6
-//  #define DIO5  21
-//  #define DIO6  20
-//  #define DIO7  19
-//  #define DIO8  18
-//  #define EOI   7
-//  #define DAV   8
-//  #define NRFD  16
-//  #define NDAC  9
-//  #define IFC   15
-//  #define ATN   14
-//  #define REN   17
-//  #define SRQ   2
     #define DIO1  2
     #define DIO2  3
     #define DIO3  4
     #define DIO4  5
-    #define DIO5  6
-    #define DIO6  7
-    #define DIO7  8
-    #define DIO8  9
-    #define EOI   14
-    #define DAV   15
+    #define DIO5  21
+    #define DIO6  20
+    #define DIO7  19
+    #define DIO8  18
+    #define EOI   6
+    #define DAV   7
     #define NRFD  16
-    #define NDAC  17
-    #define IFC   18
-    #define ATN   19
-    #define REN   20
-    #define SRQ   20
+    #define NDAC  8
+    #define IFC   15
+    #define SRQ   10
+    #define ATN   14
+    #define REN   17
   
   class GPIB {
     public:
