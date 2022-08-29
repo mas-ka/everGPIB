@@ -4,8 +4,8 @@
 #include <EEPROM.h>
 
 // for Ethernet
-//#include <Ethernet.h>
-#include <EthernetENC.h>
+#include <Ethernet.h>
+//#include <EthernetENC.h>
 byte ip[] = { 192, 168, 0, 1 }; // dummy address
 byte mac[] = { 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x00 }; // dummy locally administered
 EthernetServer server(1234); // same port(1234) as PROLOGIX GPIB-ETHERNET-CONTROLLER

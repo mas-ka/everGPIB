@@ -132,7 +132,7 @@ boolean GPIB::sendSDC(const byte addr) { // 成功したらtrue、タイムア�
 }
 
 String GPIB::getLineStatus(void) {
-  String ret = String("Management bus lines :\r");
+  String ret = String("Management bus lines :"); ret+="\r";
   pinMode(ATN,  INPUT_PULLUP); ret+="  ATN="; ret+=digitalRead(ATN)?"HIGH":"LOW"; ret+=",\r";
   pinMode(EOI,  INPUT_PULLUP); ret+="  EOI="; ret+=digitalRead(EOI)?"HIGH":"LOW"; ret+=".\r";
   ret += "Handshake lines :\r";
