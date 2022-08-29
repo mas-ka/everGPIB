@@ -109,6 +109,7 @@ void loop() {
       } else {
         Serial.print("Unknown command.\r\n");
       }
+      com = "";
     } else com += c;
   }
 
