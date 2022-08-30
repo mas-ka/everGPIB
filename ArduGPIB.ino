@@ -38,13 +38,13 @@ void setup() {
 
   // load mac address from EEPROM
   for (byte i = 4 ; i < 10 ; i++) mac[i] = EEPROM.read(i); // IP address = 4 - 9
-  
+
   Ethernet.begin(mac, ip);
   server.begin();
-  
+
   // initialize gpib
   gpib.init();
-  
+
 }
 
 void loop() {
@@ -182,9 +182,10 @@ void loop() {
       } else if (verb.startsWith("SRQ")) { // SRQ
         client.println(gpib.getSRQ()?"HIGH":"LOW");
       } else if (verb.startsWith("SPO")) { // Serial Poll
-        byte addr, status;
-        if (gpib.searchBySerialPoll(addr, status)) { // found SRQ device
-          client.println(addr+":"+("0000000"+String(status, BIN)).substring(String(status, BIN).length()-1));
+        byte a, s;
+        if (gpib.searchBySerialPoll(a, s)) { // found SRQ device
+          client.print((int)a);
+          client.println(":"+("0000000"+String(s, BIN)).substring(String(s, BIN).length()-1));
         } else client.println("NONE"); // not found
       } else if (verb.startsWith("TIM")) { // TIM [ms]
         if (!option.equals("")) gpib.ms_timeout = (option.toInt() < 1)?0:option.toInt();
@@ -204,6 +205,15 @@ void loop() {
         if (address < 1 || address > 30) client.println("ERROR");
         else if (!assertEOI && del.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
         else client.println(gpib.talk(address, option, del, assertEOI)?"OK":"ERROR");
+      } else if (verb.startsWith("CON")) { // CON:addr:[del1][+del2][-] option
+        // 1. TALK
+        if (address < 1 || address > 30) client.println("ERROR");
+        else if (!assertEOI && del.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
+        gpib.talk(address, option, del, assertEOI);
+        // 2. LISTEN
+        String reply = String();
+        gpib.listen(address, reply, del);
+        client.print(reply);
       } else client.println("ERROR"); // 上記以外
       line = ""; // バッファを空にする
     } else { line += String(c); } // 終端じゃないなら

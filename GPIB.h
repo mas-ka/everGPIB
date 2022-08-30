@@ -23,7 +23,7 @@
     #define NRFD  16
     #define NDAC  8
     #define IFC   15
-    #define SRQ   10
+    #define SRQ   9
     #define ATN   14
     #define REN   17
   

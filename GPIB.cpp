@@ -16,7 +16,7 @@ void GPIB::init(void) {
   pinMode(EOI, OUTPUT); digitalWrite(EOI, HIGH);
   pinMode(DAV, OUTPUT); digitalWrite(DAV, HIGH); 
   pinMode(NDAC, OUTPUT); digitalWrite(NDAC, LOW);
-  pinMode(NRFD, OUTPUT); digitalWrite(NRFD, LOW);
+  pinMode(NRFD, OUTPUT); digitalWrite(NRFD, HIGH);
 }
 
 boolean GPIB::talk(const byte addr, const String com, const String del, const boolean eoi) { // 送信に失敗したらfalseを返す
@@ -140,12 +140,13 @@ boolean GPIB::sendSDC(const byte addr) { // 成功したらtrue、タイムア�
 
 String GPIB::getLineStatus(void) {
   String ret = String("Management bus lines :"); ret+="\r";
-  pinMode(ATN,  INPUT_PULLUP); ret+="  ATN="; ret+=digitalRead(ATN)?"HIGH":"LOW"; ret+=",\r";
+  pinMode(SRQ,  INPUT_PULLUP); ret+="  SRQ="; ret+=digitalRead(SRQ)?"HIGH":"LOW"; ret+=",\r";
+  pinMode(REN,  INPUT_PULLUP); ret+="  REN="; ret+=digitalRead(REN)?"HIGH":"LOW"; ret+=",\r";
   pinMode(EOI,  INPUT_PULLUP); ret+="  EOI="; ret+=digitalRead(EOI)?"HIGH":"LOW"; ret+=".\r";
   ret += "Handshake lines :\r";
   pinMode(DAV,  INPUT_PULLUP); ret+="  DAV="; ret+=digitalRead(DAV)?"HIGH":"LOW"; ret+=",\r";
-  pinMode(NRFD, INPUT_PULLUP); ret+=" NRFC="; ret+=digitalRead(NRFD)?"HIGH":"LOW"; ret+=",\r";
-  pinMode(NDAC, INPUT_PULLUP); ret+=" NDAC="; ret+=digitalRead(NDAC)?"HIGH":"LOW"; ret+=".\r";
+  pinMode(NDAC, INPUT_PULLUP); ret+=" NDAC="; ret+=digitalRead(NDAC)?"HIGH":"LOW"; ret+=",\r";
+  pinMode(NRFD, INPUT_PULLUP); ret+=" NRFC="; ret+=digitalRead(NRFD)?"HIGH":"LOW"; ret+=".\r";
   ret += "Data lines :\r";
   pinMode(DIO8, INPUT_PULLUP); ret+=" DIO8="; ret+=digitalRead(DIO8)?"HIGH":"LOW"; ret+=",\r";
   pinMode(DIO7, INPUT_PULLUP); ret+=" DIO7="; ret+=digitalRead(DIO7)?"HIGH":"LOW"; ret+=",\r";
@@ -163,33 +164,34 @@ boolean GPIB::getSRQ(void) {
 }
 
 boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
+  unsigned long res_timeout = ms_timeout; // 現在のタイムアウトミリ秒を保存しておく
+  ms_timeout = 100; // 一時的に100ミリ秒にする
+  
   //  loop for searching RQS bit
-  for (int i = 1 ; i < 31 ; i++) { // address == 0 is self
+  for (byte i = 1 ; i < 31 ; i++) { // address == 0 is self
     unsigned long start = millis();
     
     // attention
     pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
 
     // unlisten
-    if (!write(0x3F)) return false; delayMicroseconds(10);
+    write(0x3F); delayMicroseconds(10);
   
     // send SPE (Serial Poll Enable)
-    if (!write(0x18)) return false; delayMicroseconds(10);
+    write(0x18); delayMicroseconds(10);
 
     // talker address
-    if (!write((byte)(0x40 + addr))) return false; delayMicroseconds(20);
+    write((byte)(0x40 + i)); delayMicroseconds(20);
 
     // end of attention
     digitalWrite(ATN, HIGH); delayMicroseconds(128);
 
     // read DIO
-    byte c;
-    boolean eoi;
-    if (!read(c, eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
-    if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
+    byte c = get_dio();
     if (bitRead(c, 6)) { // RQSビットが立っていれば
-      addr = (byte)i; // アドレスを返す
+      addr = i; // アドレスを返す
       status = c; // ステータスを返す
+      ms_timeout = res_timeout; // タイムアウトミリ秒を戻す
       return true; // trueを返す
     }
     
@@ -197,12 +199,14 @@ boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
     pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
   
     // send SPD (Serial Poll Disable)
-    if (!write(0x19)) return false; delayMicroseconds(10);
+    write(0x19); delayMicroseconds(10);
 
     // end of attention
     digitalWrite(ATN, HIGH); delayMicroseconds(128);
   }
-  return false; // RQS立ってるデバイスが見つからなかったのでfalseを返す
+  
+  ms_timeout = res_timeout; // タイムアウトミリ秒を戻す
+  return false; // 完走したけどRQS立ってるデバイスが見つからなかったのでfalseを返す
 }
 
 // private functions
@@ -235,7 +239,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
   
   // wait until (LOW == NRFD && LOW == NDAC)
   pinMode(NDAC, INPUT); pinMode(NRFD, INPUT);
-  while (HIGH == digitalRead(NDAC) || HIGH == digitalRead(NRFD)) {
+  while (HIGH == digitalRead(NDAC)) { // || HIGH == digitalRead(NRFD)) {
     if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウト監視
   }
   delayMicroseconds(10);
