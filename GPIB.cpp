@@ -165,6 +165,7 @@ boolean GPIB::getSRQ(void) {
 }
 
 boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
+  boolean isFound = false;
   unsigned long res_timeout = ms_timeout; // 現在のタイムアウトミリ秒を保存しておく
   ms_timeout = 100; // 一時的に100ミリ秒にする
   
@@ -186,15 +187,9 @@ boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
 
     // end of attention
     digitalWrite(ATN, HIGH); delayMicroseconds(128);
-
+    
     // read DIO
     byte c = get_dio();
-    if (bitRead(c, 6)) { // RQSビットが立っていれば
-      addr = i; // アドレスを返す
-      status = c; // ステータスを返す
-      ms_timeout = res_timeout; // タイムアウトミリ秒を戻す
-      return true; // trueを返す
-    }
     
     // attention
     pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(128);
@@ -204,10 +199,17 @@ boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
 
     // end of attention
     digitalWrite(ATN, HIGH); delayMicroseconds(128);
+
+    // check RQS bit
+    if (bitRead(c, 6)) { // RQSビットが立っていれば
+      addr = i; // アドレスを返す
+      status = c; // ステータスを返す
+      isFound = true; // 見つかったフラグを立てる
+    }
   }
   
   ms_timeout = res_timeout; // タイムアウトミリ秒を戻す
-  return false; // 完走したけどRQS立ってるデバイスが見つからなかったのでfalseを返す
+  return isFound; // フラグを返す
 }
 
 // private functions
@@ -294,8 +296,6 @@ boolean GPIB::read(byte &data, boolean &eoi) {
   // check EOI
   pinMode(EOI, INPUT); eoi = (LOW == digitalRead(EOI));
 
-  Serial.print(data, HEX);Serial.print(":\"");Serial.print((char)data);Serial.print("\":");Serial.println(eoi);
-  
   // data accepted
   pinMode(NDAC, OUTPUT); digitalWrite(NDAC, HIGH);
   
