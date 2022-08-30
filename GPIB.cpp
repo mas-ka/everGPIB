@@ -13,6 +13,7 @@ GPIB::GPIB() {}
 
 // public functions
 void GPIB::init(void) {
+  pinMode(REN, OUTPUT); digitalWrite(REN, HIGH); // initial is Local
   pinMode(EOI, OUTPUT); digitalWrite(EOI, HIGH);
   pinMode(DAV, OUTPUT); digitalWrite(DAV, HIGH); 
   pinMode(NDAC, OUTPUT); digitalWrite(NDAC, LOW);
@@ -99,11 +100,11 @@ void GPIB::sendIFC(void) {
 }
 
 void GPIB::sendREM(void) {
-  pinMode(REN, OUTPUT); digitalWrite(REN, LOW); delayMicroseconds(128);
+  pinMode(REN, OUTPUT); digitalWrite(REN, LOW); delayMicroseconds(128); inREN = true;
 }
 
 void GPIB::sendLOC(void) {
-  pinMode(REN, OUTPUT); digitalWrite(REN, HIGH); delayMicroseconds(128);
+  pinMode(REN, OUTPUT); digitalWrite(REN, HIGH); delayMicroseconds(128); inREN = false;
 }
 
 boolean GPIB::sendDCL(void) { // 成功したらtrue、タイムアウト等でfalse
@@ -141,7 +142,7 @@ boolean GPIB::sendSDC(const byte addr) { // 成功したらtrue、タイムア�
 String GPIB::getLineStatus(void) {
   String ret = String("Management bus lines :"); ret+="\r";
   pinMode(SRQ,  INPUT_PULLUP); ret+="  SRQ="; ret+=digitalRead(SRQ)?"HIGH":"LOW"; ret+=",\r";
-  pinMode(REN,  INPUT_PULLUP); ret+="  REN="; ret+=digitalRead(REN)?"HIGH":"LOW"; ret+=",\r";
+  ret+="  REN="; ret+=inREN?"LOW":"HIGH"; ret+=",\r";
   pinMode(EOI,  INPUT_PULLUP); ret+="  EOI="; ret+=digitalRead(EOI)?"HIGH":"LOW"; ret+=".\r";
   ret += "Handshake lines :\r";
   pinMode(DAV,  INPUT_PULLUP); ret+="  DAV="; ret+=digitalRead(DAV)?"HIGH":"LOW"; ret+=",\r";
@@ -196,7 +197,7 @@ boolean GPIB::searchBySerialPoll(byte &addr, byte &status) {
     }
     
     // attention
-    pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
+    pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(128);
   
     // send SPD (Serial Poll Disable)
     write(0x19); delayMicroseconds(10);
@@ -292,6 +293,8 @@ boolean GPIB::read(byte &data, boolean &eoi) {
   
   // check EOI
   pinMode(EOI, INPUT); eoi = (LOW == digitalRead(EOI));
+
+  Serial.print(data, HEX);Serial.print(":\"");Serial.print((char)data);Serial.print("\":");Serial.println(eoi);
   
   // data accepted
   pinMode(NDAC, OUTPUT); digitalWrite(NDAC, HIGH);

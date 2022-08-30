@@ -45,6 +45,8 @@
       boolean listen(const byte addr, String &reply, const String del); // リスナ
       
     private:
+      boolean inREN;
+      
       byte get_dio(void);
       void set_dio(const byte x);
       boolean write(const byte data);
