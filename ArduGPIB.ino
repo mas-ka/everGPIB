@@ -8,7 +8,7 @@
 //#include <EthernetENC.h>
 byte ip[] = { 192, 168, 0, 1 }; // dummy address
 byte mac[] = { 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x00 }; // dummy locally administered
-EthernetServer server(1234); // same port(1234) as PROLOGIX GPIB-ETHERNET-CONTROLLER
+EthernetServer server(2345); // different port from PROLOGIX GPIB-ETHERNET-CONTROLLER(1234)!
 EthernetClient client;
 
 // for GPIB
@@ -45,14 +45,31 @@ void setup() {
   // initialize gpib
   gpib.init();
 
+  // load default target GPIB address from EEPROM
+  byte addr = EEPROM.read(10); // default GPIB address = 10
+  if (0 < addr && addr < 31) gpib.target_address_default = addr; // 許されるGPIBアドレスは1-30
+
+  // load default delimiters for GPIB from EEPROM
+  byte del[] = {0x0D, 0x0A, 0x01}; // \r+\n & assertEOI
+  del[0] = EEPROM.read(11); del[1] = EEPROM.read(12);  del[2] = EEPROM.read(13); // default delimiters = 11, 12, 13
+  if (del[0] == 0) { del[1] = 0x00; del[2] = 0x01; } // もし1文字目がゼロだったら2文字目もゼロにしEOIを強制する
+  if (del[0] > 126) del[0] = 0x0D;
+  if (del[1] > 126) del[1] = 0x0A;
+  String s = String();
+  for (int i = 0 ; i < 2 ; i++) if (del[i] > 0) s += '+'+String(del[i], DEC); else break; // デリミタのシリアライズ
+  s = s.substring(1); s += (del[2]>0)?".":""; // EOIのシリアライズ
+  gpib.delimiters_default = s;
+
 }
 
 void loop() {
   // シリアル側コマンドインタプリタ
   // ?MAC -> XX:XX:XX:XX:XX:XX
   // ?IPA -> XXX.XXX.XXX.XXX
+  // ?TAD -> XXX
   // !MAC XX:XX:XX:XX:XX:XX
   // !IPA XXX.XXX.XXX.XXX
+  // !TAD XXX
   if (Serial.available() > 0) {
     char c = Serial.read();
     if (c == '\n') {
@@ -66,6 +83,10 @@ void loop() {
       } else if (v.equals("?IPA")) {
         for (int i = 0 ; i < 3 ; i++) { Serial.print(ip[i], DEC); Serial.print('.'); }
         Serial.print(ip[3], DEC); Serial.print("\r\n");
+      } else if (v.equals("?TAD")) {
+        Serial.print(gpib.target_address_default, DEC); Serial.print("\r\n");
+      } else if (v.equals("?DEL")) {
+        Serial.print(gpib.delimiters_default); Serial.print("\r\n");
       } else if (v.equals("!MAC")) {
         o += ':'; // 末尾に':'を追加
         int j = 0;
@@ -106,6 +127,25 @@ void loop() {
           EEPROM.write(3, (byte)t[3]);
           Serial.print(t[3], DEC); Serial.print(" saved!\r\n");
         } else Serial.print("Invalid IP address!\r\n");
+      } else if (v.equals("!TAD")) {
+        if (0 < o.toInt() && o.toInt() < 31) { // 許されるGPIBアドレスは1-30
+          EEPROM.write(10, (byte)(o.toInt())); // 10バイト目に1バイト書き込み
+          Serial.print(o.toInt(), DEC); Serial.print(" saved!\r\n");
+        } else Serial.print("Invalid address!\r\n");
+      } else if (v.equals("!DEL")) {
+        byte del[] = {0, 0, 0};
+        del[0] = (byte)(o.substring(0, o.indexOf('+'))).toInt();
+        del[1] = (byte)(o.substring(o.indexOf('+'))).toInt();
+        del[2] = (o.endsWith("."))?1:0;
+        if ((0 < del[0] && del[0] < 127) || (del[0] == 0 && del[1] == 0 && del[2] == 1)) { // 入力が適正な場合
+          EEPROM.write(11, del[0]); // 11バイト目に1文字目書き込み
+          EEPROM.write(12, del[1]); // 11バイト目に2文字目書き込み
+          EEPROM.write(13, del[2]); // 11バイト目にEOI書き込み
+          String s = String();
+          for (int i = 0 ; i < 2 ; i++) if (del[i] > 0) s += '+'+String(del[i], DEC); else break; // デリミタのシリアライズ
+          s = s.substring(1); s += (del[2]>0)?".":""; // EOIのシリアライズ
+          Serial.print(s+" saved!\r\n");
+        } else Serial.print("Invalid address!\r\n");
       } else {
         Serial.print("Unknown command.\r\n");
       }
@@ -138,7 +178,8 @@ void loop() {
   // TIM [ms]
   // CLE:addr || SDC:addr
   // LIS:addr:[del1][+del2] :delが指定されてない場合には必ずEOIまで読む
-  // TAL:addr:[del1][+del2][-] option :'-'があるとEOIをアサートしない
+  // TAL:addr:[del1][+del2][.] option :'.'があると最後の文字と同時にEOIをアサートする
+  
   if (client && client.available()) {
     char c = client.read(); 
     if (c == '\n') { // 終端文字なら
@@ -149,12 +190,17 @@ void loop() {
       verb = line.substring(0, line.indexOf(' ')); verb.trim(); verb += ":: ";
       delimiters = verb.substring(verb.indexOf(':')+1); delimiters.trim();
       address = (byte)(delimiters.substring(0, delimiters.indexOf(':')).toInt());
+      if (address < 1 || address > 30) address = gpib.target_address_default; // アドレスが不適切ならデフォルトを使用
       delimiters = delimiters.substring(delimiters.indexOf(':')+1);
       delimiters = delimiters.substring(0, delimiters.indexOf(':'));
+      if (delimiters.length() == 0) delimiters = gpib.delimiters_default; // デリミタが空ならデフォルトを使用
       verb = verb.substring(0, verb.indexOf(':')); verb.trim(); verb.toUpperCase();
 
+      // 区切りの空白がない場合にはデリミタが不正になりオプションが空になるのをエラーで弾く
+      if (!delimiters.equals(".") && !(delimiters.toInt() > 0 && delimiters.toInt() < 127)) verb = "";
+      
       // EOIを送信するかどうか
-      assertEOI = !delimiters.endsWith("-");
+      assertEOI = delimiters.endsWith(".");
 
       // デリミタのString化
       del = "";

@@ -29,7 +29,9 @@
   
   class GPIB {
     public:
-      unsigned long ms_timeout = 10000; // ゼロならタイムアウトしない(デフォルトは10秒)
+      byte target_address_default = 1;     // default target GPIB address
+      String delimiters_default = "13+10"; // default delimiters
+      unsigned long ms_timeout = 10000;    // ゼロならタイムアウトしない(デフォルトは10秒)
       
       GPIB(); // インスタンス
       void init(void); // 初期化
