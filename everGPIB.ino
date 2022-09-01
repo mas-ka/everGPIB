@@ -90,22 +90,23 @@ void loop() {
       String v = com.substring(0, 4); v.toUpperCase();
       String o = com.substring(com.indexOf(' ')); o.trim();
       if (com.equals("?") || v.equals("?HEL") || v.equals("HELP")) {
+        Serial.print("? || ?HEL || HELP : to display this help.\r");
         Serial.print("?MAC : to display MAC address.\r");
         Serial.print("?IPA : to display IP address.\r");
         Serial.print("?TAD : to display default target GPIB address.\r");
         Serial.print("?DEL : to display default delimiters & EOI assertion.\r");
-        Serial.print("?AIC : to display automatically IFC before TAL|LIS|CHA.\r");
-        Serial.print("?ARE : to display automatically REN before TAL|LIS|CHA.\r");
-        Serial.print("!MAC %02X:%02X:%02X:%02X:%02X:%02X\r : to set MAC address.\r");
-        Serial.print("!IPA %d.%d.%d.%d\r : to set IP address.\r");
-        Serial.print("!TAD %d\r : to set default target GPIB address.\r");
+        Serial.print("?AIC : to display whether automatically IFC before TAL | LIS | CHA.\r");
+        Serial.print("?ARE : to display whether automatically REN before TAL | LIS | CHA.\r");
+        Serial.print("!MAC %02X:%02X:%02X:%02X:%02X:%02X : to set MAC address.\r ex. !MAC fe:ff:00:00:00:01\r");
+        Serial.print("!IPA %d.%d.%d.%d : to set IP address.\r ex. !IPA 192.0.2.1\r");
+        Serial.print("!TAD %d : to set default target GPIB address.\r ex. !TAD 12\r");
         Serial.print("!DEL [%d][+%d][.] : to set default delimiters & EOI assertion.\r");
         Serial.print("      |    |   ^ assert EOI when period\r");
         Serial.print("      |    ^ decimal ascii code for 2nd char of delimiters\r");
-        Serial.print("      ^ decimal ascii code for 1st char of delimiters\r");
-        Serial.print("!AIC [Y|N]\r : to set automatically IFC before TAL|LIS|CHA.\r");
-        Serial.print("!ARE  {Y|N]\r : to set automatically REN before TAL|LIS|CHA.\r");
-        Serial.print("? || ?HEL || HELP : to display this help.\r\n");
+        Serial.print("      ^ decimal ascii code for 1st char of delimiters\r ex. !DEL 13+10. (for CR+LF with EOI assertion)\r");
+        Serial.print("!AIC [Y|N] : to set whether automatically IFC before TAL|LIS|CHA.\r ex. !AIC Y\r");
+        Serial.print("!ARE  {Y|N] : to set whether automatically REN before TAL|LIS|CHA.\r ex. !ARE Y\r");
+        Serial.print("\n");
       }else if (v.equals("?MAC")) {
          char buff[8];
          for (int i = 0 ; i < 5 ; i++) { sprintf(buff, "%02x:", mac[i]); Serial.print(buff); }
