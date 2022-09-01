@@ -100,11 +100,11 @@ void GPIB::sendIFC(void) {
 }
 
 void GPIB::sendREM(void) {
-  pinMode(REN, OUTPUT); digitalWrite(REN, LOW); delayMicroseconds(128); inREN = true;
+  pinMode(REN, OUTPUT); digitalWrite(REN, LOW); delayMicroseconds(128); in_remote = true;
 }
 
 void GPIB::sendLOC(void) {
-  pinMode(REN, OUTPUT); digitalWrite(REN, HIGH); delayMicroseconds(128); inREN = false;
+  pinMode(REN, OUTPUT); digitalWrite(REN, HIGH); delayMicroseconds(128); in_remote = false;
 }
 
 boolean GPIB::sendDCL(void) { // 成功したらtrue、タイムアウト等でfalse
@@ -142,7 +142,7 @@ boolean GPIB::sendSDC(const byte addr) { // 成功したらtrue、タイムア�
 String GPIB::getLineStatus(void) {
   String ret = String("Management bus lines :"); ret+="\r";
   pinMode(SRQ,  INPUT_PULLUP); ret+="  SRQ="; ret+=digitalRead(SRQ)?"HIGH":"LOW"; ret+=",\r";
-  ret+="  REN="; ret+=inREN?"LOW":"HIGH"; ret+=",\r";
+  ret+="  REN="; ret+=in_remote?"LOW":"HIGH"; ret+=",\r";
   pinMode(EOI,  INPUT_PULLUP); ret+="  EOI="; ret+=digitalRead(EOI)?"HIGH":"LOW"; ret+=".\r";
   ret += "Handshake lines :\r";
   pinMode(DAV,  INPUT_PULLUP); ret+="  DAV="; ret+=digitalRead(DAV)?"HIGH":"LOW"; ret+=",\r";

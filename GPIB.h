@@ -29,9 +29,12 @@
   
   class GPIB {
     public:
+      boolean in_remote = false;
+      unsigned long ms_timeout = 10000;    // ゼロならタイムアウトしない(デフォルトは10秒)
       byte target_address_default = 1;     // default target GPIB address
       String delimiters_default = "13+10"; // default delimiters
-      unsigned long ms_timeout = 10000;    // ゼロならタイムアウトしない(デフォルトは10秒)
+      boolean use_automatic_IFC = false,   // automatically IFC before TAL|LIS|CHA
+              use_automatic_REN = false;   // automatically REN before TAL|LIS|CHA
       
       GPIB(); // インスタンス
       void init(void); // 初期化
@@ -46,9 +49,7 @@
       boolean talk(const byte addr, const String com, const String del, const boolean eoi); // トーカ
       boolean listen(const byte addr, String &reply, const String del); // リスナ
       
-    private:
-      boolean inREN;
-      
+    private:      
       byte get_dio(void);
       void set_dio(const byte x);
       boolean write(const byte data);
