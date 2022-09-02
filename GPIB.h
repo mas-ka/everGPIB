@@ -32,7 +32,7 @@
       boolean in_remote = false;
       unsigned long ms_timeout = 10000;    // ゼロならタイムアウトしない(デフォルトは10秒)
       byte target_address_default = 1;     // default target GPIB address
-      String delimiters_default = "13+10"; // default delimiters
+      String terminator_default = "13+10."; // default terminators
       boolean use_automatic_IFC = false,   // automatically IFC before TAL|LIS|CHA
               use_automatic_REN = false;   // automatically REN before TAL|LIS|CHA
       

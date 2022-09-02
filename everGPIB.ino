@@ -7,7 +7,7 @@
 #include <Ethernet.h>
 //#include <EthernetENC.h>
 byte ip[] = { 192, 168, 0, 1 }; // dummy address
-byte mac[] = { 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x00 }; // dummy locally administered
+byte mac[] = { 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x01 }; // dummy locally administered
 EthernetServer server(2345); // different port from PROLOGIX GPIB-ETHERNET-CONTROLLER(1234)!
 EthernetClient client;
 
@@ -19,11 +19,9 @@ GPIB gpib;
 String com;
 
 // for Ethernet Command Interpreter
-String line, verb, delimiters, del, option;
+String line, verb, terminators, ter, option;
 byte address;
 boolean assertEOI;
-
-void (*resetController) (void) = 0; // reset function
 
 void setup() {
   // Setup serial
@@ -58,7 +56,7 @@ void setup() {
   String s = String();
   for (int i = 0 ; i < 2 ; i++) if (del[i] > 0) s += '+'+String(del[i], DEC); else break; // デリミタのシリアライズ
   s = s.substring(1); s += (del[2]>0)?".":""; // EOIのシリアライズ
-  gpib.delimiters_default = s;
+  gpib.terminator_default = s;
 
   // load AIC (Automatic IfC) for GPIB from EEPROM
   gpib.use_automatic_IFC = (0 != EEPROM.read(14));
@@ -74,13 +72,13 @@ void loop() {
   // ?MAC -> XX:XX:XX:XX:XX:XX
   // ?IPA -> XXX.XXX.XXX.XXX
   // ?TAD -> XXX
-  // ?DEL -> XXX[+XXX][.]
+  // ?TER -> XXX[+XXX][.]
   // ?AIC -> Y|N
   // ?ARE -> Y|N
   // !MAC XX:XX:XX:XX:XX:XX
   // !IPA XXX.XXX.XXX.XXX
   // !TAD XXX
-  // !DEL XXX[+XXX}[.]
+  // !TER XXX[+XXX}[.]
   // !AIC Y|N
   // !ARE Y|N
   if (Serial.available() > 0) {
@@ -94,16 +92,16 @@ void loop() {
         Serial.print("?MAC : to display MAC address.\r");
         Serial.print("?IPA : to display IP address.\r");
         Serial.print("?TAD : to display default target GPIB address.\r");
-        Serial.print("?DEL : to display default delimiters & EOI assertion.\r");
+        Serial.print("?TER : to display default terminators & EOI assertion.\r");
         Serial.print("?AIC : to display whether automatically IFC before TAL | LIS | CHA.\r");
         Serial.print("?ARE : to display whether automatically REN before TAL | LIS | CHA.\r");
         Serial.print("!MAC %02X:%02X:%02X:%02X:%02X:%02X : to set MAC address.\r ex. !MAC fe:ff:00:00:00:01\r");
         Serial.print("!IPA %d.%d.%d.%d : to set IP address.\r ex. !IPA 192.0.2.1\r");
         Serial.print("!TAD %d : to set default target GPIB address.\r ex. !TAD 12\r");
-        Serial.print("!DEL [%d][+%d][.] : to set default delimiters & EOI assertion.\r");
+        Serial.print("!TER [%d][+%d][.] : to set default terminators & EOI assertion.\r");
         Serial.print("      |    |   ^ assert EOI when period\r");
-        Serial.print("      |    ^ decimal ascii code for 2nd char of delimiters\r");
-        Serial.print("      ^ decimal ascii code for 1st char of delimiters\r ex. !DEL 13+10. (for CR+LF with EOI assertion)\r");
+        Serial.print("      |    ^ decimal ascii code for 2nd char of terminators\r");
+        Serial.print("      ^ decimal ascii code for 1st char of terminators\r ex. !TER 13+10. (for CR+LF with EOI assertion)\r");
         Serial.print("!AIC [Y|N] : to set whether automatically IFC before TAL|LIS|CHA.\r ex. !AIC Y\r");
         Serial.print("!ARE  {Y|N] : to set whether automatically REN before TAL|LIS|CHA.\r ex. !ARE Y\r");
         Serial.print("\n");
@@ -116,8 +114,8 @@ void loop() {
         Serial.print(ip[3], DEC); Serial.print("\r\n");
       } else if (v.equals("?TAD")) {
         Serial.print(gpib.target_address_default, DEC); Serial.print("\r\n");
-      } else if (v.equals("?DEL")) {
-        Serial.print(gpib.delimiters_default); Serial.print("\r\n");
+      } else if (v.equals("?TER")) {
+        Serial.print(gpib.terminator_default); Serial.print("\r\n");
       } else if (v.equals("?AIC")) {
         Serial.print(gpib.use_automatic_IFC?"Y":"N"); Serial.print("\r\n");
       } else if (v.equals("?ARE")) {
@@ -137,10 +135,10 @@ void loop() {
         isInvalid |= (j != 6); // 6つ読めなかった場合にInvalidとする
         if(!isInvalid){
           for (int i = 0 ; i < 5 ; i++) {
-            EEPROM.write(4+i, (byte)t[i]);
+            EEPROM.write(4+i, (byte)t[i]); mac[i] = (byte)t[i];
             sprintf(buf, "%02X", t[i]); Serial.print(String(buf)+":");
           }
-          EEPROM.write(9, (byte)t[5]);
+          EEPROM.write(9, (byte)t[5]); mac[5] = (byte)t[5];
           sprintf(buf, "%02X", t[5]); Serial.print(String(buf)+" saved!\r\n");
         } else Serial.print("Invalid MAC address!\r\n");
       } else if (v.equals("!IPA")) {
@@ -156,39 +154,43 @@ void loop() {
         isInvalid |= (j != 4); // 4つ読めなかった場合にInvalidとする
         if(!isInvalid){
           for (int i = 0 ; i < 3 ; i++) {
-            EEPROM.write(i, (byte)t[i]);
+            EEPROM.write(i, (byte)t[i]); ip[i] = (byte)t[i];
             Serial.print(t[i], DEC); Serial.print(".");
           }
-          EEPROM.write(3, (byte)t[3]);
+          EEPROM.write(3, (byte)t[3]); ip[3] = (byte)t[3];
           Serial.print(t[3], DEC); Serial.print(" saved!\r\n");
         } else Serial.print("Invalid IP address!\r\n");
       } else if (v.equals("!TAD")) {
         if (0 < o.toInt() && o.toInt() < 31) { // 許されるGPIBアドレスは1-30
           EEPROM.write(10, (byte)(o.toInt())); // 10バイト目に1バイト書き込み
+          gpib.target_address_default = (byte)(o.toInt());
           Serial.print(o.toInt(), DEC); Serial.print(" saved!\r\n");
         } else Serial.print("Invalid address!\r\n");
-      } else if (v.equals("!DEL")) {
-        byte del[] = {0, 0, 0};
-        del[0] = (byte)(o.substring(0, o.indexOf('+'))).toInt();
-        del[1] = (byte)(o.substring(o.indexOf('+'))).toInt();
-        del[2] = (o.endsWith("."))?1:0;
-        if ((0 < del[0] && del[0] < 127) || (del[0] == 0 && del[1] == 0 && del[2] == 1)) { // 入力が適正な場合
-          EEPROM.write(11, del[0]); // 11バイト目に1文字目書き込み
-          EEPROM.write(12, del[1]); // 12バイト目に2文字目書き込み
-          EEPROM.write(13, del[2]); // 13バイト目にEOI書き込み
+      } else if (v.equals("!TER")) {
+        byte ter[] = {0, 0, 0};
+        ter[0] = (byte)(o.substring(0, o.indexOf('+'))).toInt();
+        ter[1] = (byte)(o.substring(o.indexOf('+'))).toInt();
+        ter[2] = (o.endsWith("."))?1:0;
+        if ((0 < ter[0] && ter[0] < 127) || (ter[0] == 0 && ter[1] == 0 && ter[2] == 1)) { // 入力が適正な場合
+          EEPROM.write(11, ter[0]); // 11バイト目に1文字目書き込み
+          EEPROM.write(12, ter[1]); // 12バイト目に2文字目書き込み
+          EEPROM.write(13, ter[2]); // 13バイト目にEOI書き込み
           String s = String();
-          for (int i = 0 ; i < 2 ; i++) if (del[i] > 0) s += '+'+String(del[i], DEC); else break; // デリミタのシリアライズ
-          s = s.substring(1); s += (del[2]>0)?".":""; // EOIのシリアライズ
+          for (int i = 0 ; i < 2 ; i++) if (ter[i] > 0) s += '+'+String(ter[i], DEC); else break; // デリミタのシリアライズ
+          s = s.substring(1); s += (ter[2]>0)?".":""; // EOIのシリアライズ
+          gpib.terminator_default = String(s);
           Serial.print(s+" saved!\r\n");
-        } else Serial.print("Invalid address!\r\n");
+        } else Serial.print("Invalid terminators or EOI assertion!\r\n");
       } else if (v.equals("!AIC")) {
         if (o.startsWith("Y") || o.startsWith("N")) {
           EEPROM.write(14, (o.startsWith("Y"))?1:0); // 14バイト目にAIC書き込み
+          gpib.use_automatic_IFC = o.startsWith("Y");
           Serial.print((o.startsWith("Y"))?"Y":"N"); Serial.print(" saved!\r\n");
         } else Serial.print("Invalid parameter!\r\n");
       } else if (v.equals("!ARE")) {
         if (o.startsWith("Y") || o.startsWith("N")) {
           EEPROM.write(15, (o.startsWith("Y"))?1:0); // 15バイト目にARE書き込み
+          gpib.use_automatic_REN = o.startsWith("Y");
           Serial.print((o.startsWith("Y"))?"Y":"N"); Serial.print(" saved!\r\n");
         } else Serial.print("Invalid parameter!\r\n");
       } else Serial.print("Unknown command.\r\n");
@@ -200,17 +202,15 @@ void loop() {
   EthernetClient new_client = server.accept();
   if (new_client) { // 新しいクライアントが接続してきた
     if (client) { // 既にクライアントが接続していたら
-      new_client.print("BUSY\r\n"); new_client.stop(); // "BUSY"を返して切断する
+      new_client.stop(); // 何も言わず切断する
     } else { // これが1つめのクライアントなら
-      new_client.print("ACCEPT\r\n"); // "ACCEPT"を返す
-      client = new_client;
+      client = new_client; // 何も言わず受諾する
       line = String();
     }
   }
 
   // Etherrnet側コマンドインタプリタ
   // BYE || QUI || EXI
-  // RES || RST
   // STA
   // IFC
   // REM || REN
@@ -220,9 +220,9 @@ void loop() {
   // SPO
   // TIM [ms]
   // CLE:[addr] || SDC:[addr]
-  // LIS:[addr]:[del1][+del2][.] :delが指定されてない場合には必ずEOIまで読む
-  // TAL:[addr]:[del1][+del2][.] option :'.'があると最後の文字と同時にEOIをアサートする
-  // CHA:[addr]:[del1][+del2][.] option :TAL and LIS
+  // LIS:[addr]:[ter1][+ter2][.] :terが指定されてない場合には必ずEOIまで読む
+  // TAL:[addr]:[ter1][+ter2][.] option :'.'があると最後の文字と同時にEOIをアサートする
+  // CHA:[addr]:[ter1][+ter2][.] option :TAL and LIS
   
   if (client && client.available()) {
     char c = client.read(); 
@@ -232,33 +232,31 @@ void loop() {
       // コマンド行の分割
       option = line.substring(line.indexOf(' ')); option.trim();
       verb = line.substring(0, line.indexOf(' ')); verb.trim(); verb += ":: ";
-      delimiters = verb.substring(verb.indexOf(':')+1); delimiters.trim();
-      address = (byte)(delimiters.substring(0, delimiters.indexOf(':')).toInt());
+      terminators = verb.substring(verb.indexOf(':')+1); terminators.trim();
+      address = (byte)(terminators.substring(0, terminators.indexOf(':')).toInt());
       if (address < 1 || address > 30) address = gpib.target_address_default; // アドレスが不適切ならデフォルトを使用
-      delimiters = delimiters.substring(delimiters.indexOf(':')+1);
-      delimiters = delimiters.substring(0, delimiters.indexOf(':'));
-      if (delimiters.length() == 0) delimiters = gpib.delimiters_default; // デリミタが空ならデフォルトを使用
+      terminators = terminators.substring(terminators.indexOf(':')+1);
+      terminators = terminators.substring(0, terminators.indexOf(':'));
+      if (terminators.length() == 0) terminators = gpib.terminator_default; // デリミタが空ならデフォルトを使用
       verb = verb.substring(0, verb.indexOf(':')); verb.trim(); verb.toUpperCase();
 
       // 区切りの空白がない場合にはデリミタが不正になりオプションが空になるのをエラーで弾く
-      if (!delimiters.equals(".") && !(delimiters.toInt() > 0 && delimiters.toInt() < 127)) verb = "";
+      if (!terminators.equals(".") && !(terminators.toInt() > 0 && terminators.toInt() < 127)) verb = "";
       
       // EOIを送信するかどうか
-      assertEOI = delimiters.endsWith(".");
+      assertEOI = terminators.endsWith(".");
 
       // デリミタのString化
-      del = "";
-      delimiters += '+'; // 末尾に'+'追加
-      while (delimiters.length() > 0) {
-        del += (char)delimiters.substring(0, delimiters.indexOf('+')).toInt();
-        delimiters = delimiters.substring(delimiters.indexOf('+')+1);
+      ter = "";
+      terminators += '+'; // 末尾に'+'追加
+      while (terminators.length() > 0) {
+        ter += (char)terminators.substring(0, terminators.indexOf('+')).toInt();
+        terminators = terminators.substring(terminators.indexOf('+')+1);
       }
       
       // コマンドの解釈
       if (verb.startsWith("BYE") || verb.startsWith("QUI") || verb.startsWith("EXI")) { // クライアント停止
         client.stop();
-      } else if (verb.startsWith("RES") || verb.startsWith("RST")) { // リセット操作
-        delay(1000); resetController();
       } else if (verb.startsWith("STA")) {// ライン状態の取得と送信
         client.println(gpib.getLineStatus()); 
       } else if (verb.startsWith("IFC")) { // IFC
@@ -284,39 +282,39 @@ void loop() {
       } else if (verb.startsWith("CLE") || verb.startsWith("SDC")) { // CLE:[addr] || SDC:[addr]
         if (address < 1 || address > 30) client.println("ERROR");
         else client.println(gpib.sendSDC(address)?"OK":"ERROR");
-      } else if (verb.startsWith("LIS")) { // LIS:[addr]:[del1][+del2][.]
+      } else if (verb.startsWith("LIS")) { // LIS:[addr]:[ter1][+ter2][.]
         if (address < 1 || address > 30) client.println("ERROR");
         else {
           if (gpib.use_automatic_IFC) gpib.sendIFC(); // 自動IFCならIFCする
           boolean in_remote_saved = gpib.in_remote; // 現在の状態を保存
           if (!in_remote_saved && gpib.use_automatic_REN) gpib.sendREM(); // 現在LOCかつ自動RENならRENする
           String reply = String();
-          gpib.listen(address, reply, del);
+          gpib.listen(address, reply, ter);
           client.print(reply);
           if (!in_remote_saved) gpib.sendLOC(); // 元々LOCならLOCに戻す
         }
-      } else if (verb.startsWith("TAL")) { // TAL:[addr]:[del1][+del2][.] option
+      } else if (verb.startsWith("TAL")) { // TAL:[addr]:[ter1][+ter2][.] option
         if (address < 1 || address > 30) client.println("ERROR");
-        else if (!assertEOI && del.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
+        else if (!assertEOI && ter.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
         else {
           if (gpib.use_automatic_IFC) gpib.sendIFC(); // 自動IFCならIFCする
           boolean in_remote_saved = gpib.in_remote; // 現在の状態を保存
           if (!in_remote_saved && gpib.use_automatic_REN) gpib.sendREM(); // 現在LOCかつ自動RENならRENする
-          client.println(gpib.talk(address, option, del, assertEOI)?"OK":"ERROR");
+          client.println(gpib.talk(address, option, ter, assertEOI)?"OK":"ERROR");
           if (!in_remote_saved) gpib.sendLOC(); // 元々LOCならLOCに戻す
         }
-      } else if (verb.startsWith("CHA")) { // CHA:[addr]:[del1][+del2][.] option
+      } else if (verb.startsWith("CHA")) { // CHA:[addr]:[ter1][+ter2][.] option
         if (address < 1 || address > 30) client.println("ERROR");
-        else if (!assertEOI && del.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
+        else if (!assertEOI && ter.equals("")) client.println("ERROR"); // デリミタもEOIもなしは許さない
         else {
           if (gpib.use_automatic_IFC) gpib.sendIFC(); // 自動IFCならIFCする
           boolean in_remote_saved = gpib.in_remote; // 現在の状態を保存
           if (!in_remote_saved && gpib.use_automatic_REN) gpib.sendREM(); // 現在LOCかつ自動RENならRENする
           // 1. TALK
-          gpib.talk(address, option, del, assertEOI);
+          gpib.talk(address, option, ter, assertEOI);
           // 2. LISTEN
           String reply = String();
-          gpib.listen(address, reply, del);
+          gpib.listen(address, reply, ter);
           client.print(reply);
           if (!in_remote_saved) gpib.sendLOC(); // 元々LOCならLOCに戻す
         }
