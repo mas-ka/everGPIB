@@ -40,15 +40,21 @@ boolean GPIB::talk(const byte addr, const String com, const String del, const bo
   digitalWrite(ATN, HIGH); delayMicroseconds(200);
     
   // write string
-  if (!del.equals("")) com.concat(del); // デリミタが空でなければ末尾に連結する
+  String command = String(com);
+  if (!del.equals("")) command.concat(del); // デリミタが空でなければ末尾に連結する
   int i;
-  for (i = 0 ; i < com.length()-1 ; i++) {
-    if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);
+  for (i = 0 ; i < command.length()-1 ; i++) {
+    if (!write((byte)(command.charAt(i)))) return false; delayMicroseconds(20);
+    Serial.println((int)(command.charAt(i)));
   }
   
   // write last char
-  if (eoi) digitalWrite(EOI, LOW); // 渡されたEOI指示がtrueならEOIラインをLOWにしてアサートする
-  if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);
+  if (eoi) {
+    digitalWrite(EOI, LOW); // 渡されたEOI指示がtrueならEOIラインをLOWにしてアサートする
+    Serial.println("EOI assertion!");
+  }
+  if (!write((byte)(command.charAt(i)))) return false; delayMicroseconds(20);
+  Serial.println((int)(command.charAt(i)));
   digitalWrite(EOI, HIGH);
 
   return true;
@@ -86,6 +92,7 @@ boolean GPIB::listen(const byte addr, String &reply, const String del) {
     if (!read(c, eoi)) return false; // バイト読み込みに失敗したのでfalseを返す
     if (ms_timeout > 0 && millis()-start > ms_timeout) return false; // タイムアウトしたんでfalseで返す
     reply += (char)c; // 読めた文字を追加
+    Serial.println(reply);
     if (eoi) return true; // EOIが来たんで読めたとこまででtrueで返す
     if (reply.endsWith(del)) { // デリミタが来た
       reply = reply.substring(0, reply.indexOf(del));
