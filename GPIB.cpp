@@ -21,8 +21,8 @@ void GPIB::init(void) {
 }
 
 boolean GPIB::talk(const byte addr, const String com, const String del, const boolean eoi) { // 送信に失敗したらfalseを返す
-  // set EOI to FALSE (HIGH)
-  pinMode(EOI, OUTPUT); digitalWrite(EOI, HIGH);
+  // set EOI to OUTPUT
+  pinMode(EOI, OUTPUT);
   
   // attention
   pinMode(ATN, OUTPUT); digitalWrite(ATN, LOW); delayMicroseconds(30);
@@ -41,14 +41,12 @@ boolean GPIB::talk(const byte addr, const String com, const String del, const bo
     
   // write string
   if (!del.equals("")) com.concat(del); // デリミタが空でなければ末尾に連結する
-  int i;
-  for (i = 0 ; i < com.length()-1 ; i++) {
+  for (int i = 0 ; i < com.length() ; i++) {
+    if (eoi && i == com.length()-1) { // 最終文字かつEOI付加が指示されていたならば
+      digitalWrite(EOI, LOW); delayMicroseconds(20); // EOIをアサート
+    }
     if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);
   }
-  
-  // write last char
-  if (eoi) digitalWrite(EOI, LOW); // 渡されたEOI指示がtrueならEOIラインをLOWにしてアサートする
-  if (!write((byte)(com.charAt(i)))) return false; delayMicroseconds(20);
   digitalWrite(EOI, HIGH);
 
   return true;
@@ -75,7 +73,7 @@ boolean GPIB::listen(const byte addr, String &reply, const String del) {
   
   // end of attention
   pinMode(NRFD, OUTPUT); digitalWrite(NRFD, LOW);
-  pinMode(NDAC, OUTPUT); digitalWrite(NDAC, LOW); delayMicroseconds(10);
+  pinMode(NDAC, OUTPUT); digitalWrite(NDAC, LOW); delayMicroseconds(20);
   digitalWrite(ATN, HIGH); delayMicroseconds(20);
   
   // recieve data
@@ -264,8 +262,7 @@ boolean GPIB::write(const byte data) { // 与えられた1バイトが書き込�
   }
   delayMicroseconds(20);
   
-  digitalWrite(DAV, HIGH);
-  //set_dio(0); delayMicroseconds(10);
+  digitalWrite(DAV, HIGH); delayMicroseconds(10);
 
   return true;
 }
