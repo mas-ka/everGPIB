@@ -4,9 +4,9 @@
 #include <EEPROM.h>
 
 // for Ethernet
-#include <Ethernet.h>
-//#include <EthernetENC.h>
-byte ip[] = { 192, 168, 0, 1 }; // dummy address
+//#include <Ethernet.h>
+#include <EthernetENC.h>
+byte ip[] = { 10, 77, 0, 205 }; // dummy address
 byte mac[] = { 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x01 }; // dummy locally administered
 EthernetServer server(2345); // different port from PROLOGIX GPIB-ETHERNET-CONTROLLER(1234)!
 EthernetClient client;
@@ -27,9 +27,6 @@ void setup() {
   // Setup serial
   Serial.begin(9600);
   com = String();
-  
-  // initialize the ethernet device
-  Ethernet.init(10); // CS pin10
 
   // load ip address from EEPROM
   for (byte i = 0 ; i < 4 ; i++) ip[i] = EEPROM.read(i); // IP address = 0 - 3
@@ -37,7 +34,8 @@ void setup() {
   // load mac address from EEPROM
   for (byte i = 4 ; i < 10 ; i++) mac[i] = EEPROM.read(i); // IP address = 4 - 9
 
-  Ethernet.begin(mac, ip);
+  Ethernet.init(10); // CS pin10
+  Ethernet.begin(mac, IPAddress(ip[0], ip[1], ip[2], ip[3])); // ArduinoNanoEveryでENC28J60を使うにはこうしないとイケナイ!
   server.begin();
 
   // initialize gpib
