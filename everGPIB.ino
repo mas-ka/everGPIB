@@ -4,6 +4,7 @@
 #include <EEPROM.h>
 
 // for Ethernet
+#include <SPI.h>
 //#include <Ethernet.h>
 #include <EthernetENC.h>
 byte ip[] = { 10, 77, 0, 205 }; // dummy address
@@ -26,13 +27,14 @@ boolean assertEOI;
 void setup() {
   // Setup serial
   Serial.begin(9600);
+  while (!Serial);
   com = String();
 
   // load ip address from EEPROM
   for (byte i = 0 ; i < 4 ; i++) ip[i] = EEPROM.read(i); // IP address = 0 - 3
 
   // load mac address from EEPROM
-  for (byte i = 4 ; i < 10 ; i++) mac[i] = EEPROM.read(i); // IP address = 4 - 9
+  for (byte i = 4 ; i < 10 ; i++) mac[i-4] = EEPROM.read(i); // IP address = 4 - 9
 
   Ethernet.init(10); // CS pin10
   Ethernet.begin(mac, IPAddress(ip[0], ip[1], ip[2], ip[3])); // ArduinoNanoEveryでENC28J60を使うにはこうしないとイケナイ!
