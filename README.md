@@ -180,3 +180,12 @@ everGPIB は TCP ポート **`2345`** で接続を待ち受けます（1クラ�
 * [docs/everGPIB_電気回路図.pdf](docs/everGPIB_電気回路図.pdf): 電気回路図
 * [docs/everGPIB_結線図.pdf](docs/everGPIB_結線図.pdf): 配線・結線図
 * [docs/everGPIB_NanoV3Ethernetシールド_パターンカット説明図.pdf](docs/everGPIB_NanoV3Ethernetシールド_パターンカット説明図.pdf): イーサネットシールドのパターンカット箇所指示図
+
+---
+
+## 8. ライセンス
+
+本プロジェクトは **クリエイティブ・コモンズ 表示 - 継承 4.0 国際 ライセンス（CC BY-SA 4.0）** の下で公開されています。  
+ライセンサー: **mas-ka**
+
+詳細なライセンス条文は [LICENSE](LICENSE) を参照してください。
